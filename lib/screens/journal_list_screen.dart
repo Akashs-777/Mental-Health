@@ -10,7 +10,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../services/api_service.dart';
 import '../models/journal_model.dart';
 import '../widgets/nav_drawer.dart';
-import 'journal_chat_screen.dart';
+import 'journaling_chat_screen.dart';
 import 'journal_entry_screen.dart';
 
 class JournalListScreen extends StatefulWidget {
@@ -109,48 +109,55 @@ class _JournalListScreenState extends State<JournalListScreen> {
         title: const Text('Journal Entries'),
       ),
       drawer: const NavDrawer(selectedIndex: 2),
-      body: _isLoading ? const Center(child: CircularProgressIndicator()) : ListView.builder(
-        itemCount: _journalEntries.length,
-        itemBuilder: (context, index) {
-          final journal = _journalEntries[index];
-          DateTime dateTime = DateTime.parse(journal.createdAt).toLocal();
-          var format = DateFormat('dd MMM, yyyy hh:MM a');
-          String formattedDate = format.format(dateTime.toUtc().add(const Duration(hours: -8)));
-          return ListTile(
-            title: Text(journal.title),
-            subtitle: Text(formattedDate),
-            onTap: () {
-              Navigator.of(context).push(
-                MaterialPageRoute(
-                  builder:
-                      (context) => ViewJournalScreen(
-                        title: journal.title,
-                        content: journal.journalEntry,
-                        date: formattedDate,
-                      ),
-                ),
-              );
-            },
-            trailing: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                IconButton(
-                  icon: const Icon(Icons.edit),
-                  onPressed: () {
-                    // Handle edit action
-                  },
-                ),
-                IconButton(
-                  icon: const Icon(Icons.delete),
-                  onPressed: () {
-                    _deleteJournal(journal.journalId);
-                  },
-                ),
-              ],
-            ),
-          );
-        },
-      ),
+      body:
+          _isLoading
+              ? const Center(child: CircularProgressIndicator())
+              : ListView.builder(
+                itemCount: _journalEntries.length,
+                itemBuilder: (context, index) {
+                  final journal = _journalEntries[index];
+                  DateTime dateTime =
+                      DateTime.parse(journal.createdAt).toLocal();
+                  var format = DateFormat('dd MMM, yyyy hh:MM a');
+                  String formattedDate = format.format(
+                    dateTime.toUtc().add(const Duration(hours: -8)),
+                  );
+                  return ListTile(
+                    title: Text(journal.title),
+                    subtitle: Text(formattedDate),
+                    onTap: () {
+                      Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder:
+                              (context) => ViewJournalScreen(
+                                title: journal.title,
+                                overallFeeling: journal.overallFeeling,
+                                journalEntry: journal.journalEntry,
+                                date: formattedDate,
+                              ),
+                        ),
+                      );
+                    },
+                    trailing: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        IconButton(
+                          icon: const Icon(Icons.edit),
+                          onPressed: () {
+                            // Handle edit action
+                          },
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.delete),
+                          onPressed: () {
+                            _deleteJournal(journal.journalId);
+                          },
+                        ),
+                      ],
+                    ),
+                  );
+                },
+              ),
       floatingActionButton: FloatingActionButton(
         onPressed: () {
           Navigator.of(context).push(

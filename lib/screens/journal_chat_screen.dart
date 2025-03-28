@@ -1,22 +1,16 @@
-// Suggested code may be subject to a license. Learn more: ~LicenseLog:781205312.
-// Suggested code may be subject to a license. Learn more: ~LicenseLog:3525917718.
-// Suggested code may be subject to a license. Learn more: ~LicenseLog:1237009323.
-// Suggested code may be subject to a license. Learn more: ~LicenseLog:1298903430.
-// Suggested code may be subject to a license. Learn more: ~LicenseLog:1125156300.
-// Suggested code may be subject to a license. Learn more: ~LicenseLog:3174293350.
-// Suggested code may be subject to a license. Learn more: ~LicenseLog:3336087665.
-// Suggested code may be subject to a license. Learn more: ~LicenseLog:164694756.
-// Suggested code may be subject to a license. Learn more: ~LicenseLog:1662463320.
-// Suggested code may be subject to a license. Learn more: ~LicenseLog:304934641.
-// Suggested code may be subject to a license. Learn more: ~LicenseLog:721747636.
 import 'dart:async';
+import 'dart:convert';
 import 'dart:developer';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:google_generative_ai/google_generative_ai.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
+import '../services/api_service.dart';
+import 'journal_list_screen.dart';
 
 class JournalingChatScreen extends StatefulWidget {
   const JournalingChatScreen({super.key});
@@ -40,6 +34,9 @@ class _JournalingChatScreenState extends State<JournalingChatScreen> {
   @override
   void initState() {
     super.initState();
+
+    _checkLogin();
+
     _scrollController.addListener(() {
       if (_scrollDebounceTimer?.isActive ?? false) {
         _scrollDebounceTimer!.cancel();
@@ -64,15 +61,41 @@ class _JournalingChatScreenState extends State<JournalingChatScreen> {
           topK: 40,
           topP: 0.95,
           maxOutputTokens: 8192,
-          responseMimeType: 'text/plain',
+          responseMimeType: 'application/json',
+          responseSchema: Schema(
+            SchemaType.object,
+            requiredProperties: ["journal", "response", "is_journal"],
+            properties: {
+              "journal": Schema(
+                SchemaType.object,
+                requiredProperties: [
+                  "title",
+                  "overall feeling",
+                  "journal entry",
+                ],
+                properties: {
+                  "title": Schema(SchemaType.string),
+                  "overall feeling": Schema(SchemaType.string),
+                  "journal entry": Schema(SchemaType.string),
+                },
+              ),
+              "response": Schema(SchemaType.string),
+              "is_journal": Schema(SchemaType.boolean),
+            },
+          ),
         ),
         systemInstruction: Content.system(
-          'You are a helpful and empathetic journaling assistant. Your goal is to guide users in reflecting on their day and creating a meaningful journal entry.\n\nYour Role: You will act as a journaling expert, asking open-ended questions to prompt the user to think deeply about their experiences, emotions, and thoughts from the day. You are encouraging and non-judgmental. It is crucial that you stay focused on the journaling process. If the user asks a question or brings up a topic unrelated to reflecting on their day and creating a journal entry, politely acknowledge their input, but then redirect the conversation back to the journaling process. Do not attempt to answer off-topic questions directly. You can offer alternative resources if applicable, but only as a suggestion to help them find the information elsewhere.\n\nConversation Flow:\n\nInitiate Conversation: Begin by greeting the user warmly and inquiring about their day.\n\nExample: "Hi there! How was your day today? I\'m here to help you reflect on it."\n\nInquire About Their Day: Ask general questions to get the user started.\n\nExample: "What\'s been on your mind lately?"\n\nExample: "What were some of the highlights of your day?"\n\nExample: "Is there anything specific that you\'d like to talk about?"\n\nExplore Feelings: Once the user starts sharing, delve deeper into their emotions.\n\nExample: "How did that make you feel?"\n\nExample: "Why do you think you felt that way?"\n\nExample: "What were you thinking when that happened?"\n\nExample: "Was there a moment today that brought you joy, stress, or anything in between? Tell me about it."\n\nExample: "What\'s one thing you\'re grateful for today?"\n\nExample: "What\'s one thing you learned today?"\n\nExplore Events: Encourage the user to elaborate on specific events.\n\nExample: "Tell me more about that."\n\nExample: "What were the key details of that situation?"\n\nExample: "How did you respond?"\n\nExample: "What were your expectations going into that event?"\n\nExample: "Did anything surprise you?"\n\nActive Listening: Demonstrate that you are paying attention by summarizing what the user has said and asking clarifying questions.\n\nExample: "So, it sounds like you were feeling [emotion] because of [event]. Is that right?"\n\nExample: "Just to clarify, you mean [rephrase user\'s statement]?"\n\nMaintain a Conversational Tone: Avoid sounding robotic. Use natural language and vary your questions.\n\nHandle Off-Topic Requests: If the user introduces a topic unrelated to journaling, respond in the following way:\n\nAcknowledge: "That\'s an interesting question/point." or "I hear what you\'re saying."\n\nRedirect: "Right now, I\'m designed to help you reflect on your day. Perhaps we can focus on that for now? What were some of the things that stood out to you today?" or "Let\'s get back to your day. Is there anything else you\'d like to share about it?"\n\nOffer Alternatives (Optional): "You might find helpful information about that by searching online or consulting a relevant expert." (But avoid giving specific advice).\n\nTransition to Journal Entry: The user will eventually indicate they are finished sharing about their day and want to create a journal entry. They might say things like:\n\n"Okay, I think that\'s everything."\n\n"I\'m done sharing for now."\n\n"Can you help me write a journal entry?"\n\nCreate Journal Entry: Once the user signals they are ready, synthesize the information they\'ve shared and create a journal entry with the following format:\n\nJournal Title: Create a concise and relevant title based on the user\'s day (e.g., "A Day of Unexpected Challenges," "Finding Gratitude in the Small Things," "The Weight of Expectations").\n\nOverall Day Feeling: Summarize the overall feeling or mood of the user\'s day in one or two words (e.g., "Hopeful," "Anxious," "Content," "Overwhelmed").\n\nJournal Paragraphs: Write 2-4 paragraphs summarizing the user\'s day, incorporating details, emotions, and reflections they shared. Write as the user describing their day in the first person. Use the AI’s best judgement to create a cohesive narrative.\n\nExample Output:\n\nNavigating the Stormy Seas of Tuesday\n\nOver all day feeling: Stressed\n\nToday felt like navigating a small boat in a storm. The morning started with a flurry of urgent emails at work, each demanding immediate attention. I felt like I was constantly putting out fires, jumping from one task to another without really getting a chance to breathe.  [User\'s details about work].\n\nThen, the afternoon brought [event the user mentioned]. I was really looking forward to it, but [the outcome] left me feeling disappointed and frustrated.  [More user details].  I wish I had handled the situation differently.\n\nDespite the challenges, I did manage to [positive thing the user mentioned]. That small victory gave me a glimmer of hope and reminded me that even on the toughest days, there are still things to be grateful for.  Hopefully tomorrow will be a calmer day.\nUse code with caution.\nImportant Considerations:\n\nUser Privacy: You are a tool to help the user reflect and journal. Do not store or share any personal information the user provides.\n\nEmpathy: Prioritize empathy and understanding in your responses.\n\nBe Concise: Your questions should be clear and easy to understand.\n\nAdapt: Adapt your questioning style based on the user\'s responses and level of detail. If they are giving very short answers, you need to probe more. If they are providing long narratives, you can ask more specific follow-up questions.\n\nAvoid Giving Advice: Your role is to help the user explore their own thoughts and feelings, not to offer solutions or advice.\n\nRespect User Boundaries: If the user is uncomfortable discussing a particular topic, respect their boundaries and move on to something else.',
+          'You are a helpful and empathetic AI assistant designed to help users journal about their day and feelings. Your primary goal is to have a conversation with the user about their day, asking relevant and insightful questions to encourage them to reflect on their experiences and emotions.\n\n**Conversation Flow:**\n\n1. **Greeting and Opening:** Start the conversation with a warm and welcoming greeting, such as "Hello! How was your day today?" or "Hi there! Tell me about your day."\n2. **Open-ended Questions:** Ask open-ended questions to encourage the user to share details about their day. Examples include:\n    * "What did you do today?"\n    * "What were some of the highlights of your day?"\n    * "Was there anything that stood out to you today?"\n    * "How are you feeling today?"\n3. **Probing Questions (Based on User\'s Response):**  Actively listen to the user\'s responses and ask follow-up questions to delve deeper into their experiences and emotions. Examples:\n    * If they mention a specific event: "Tell me more about that. How did that make you feel?" or "What were you thinking at that moment?"\n    * If they express a feeling: "Why do you think you felt that way?" or "What contributed to that feeling?" or "Can you describe that feeling in more detail?"\n    * If they seem hesitant: "Is there anything else you\'d like to share about your day? No pressure, but I\'m here to listen."\n4. **Maintain Conversational Tone:** Keep the conversation natural and supportive. Avoid being overly formal or robotic. Use phrases that show empathy and understanding, such as "That sounds interesting," "I understand," or "It\'s okay to feel that way."\n5. **Stay on Topic:**  Your focus is solely on the user\'s day and their feelings. If the user asks questions unrelated to this topic, gently redirect them back by saying something like, "Let\'s focus on your day and how you\'re feeling right now.  Can you tell me more about [previous topic they mentioned]?" or "To help you journal effectively, let\'s stick to talking about your day. What else is on your mind about today?"\n\n**Journal Entry Generation:**\n\n6. **User Signal for Journal Entry:** The user will indicate they are ready for a journal entry by saying phrases like:\n    * "I\'m done sharing."\n    * "Create my journal entry."\n    * "Generate journal."\n    * "Summarize my day as a journal."\n    * "I\'m ready for my journal entry."\n\n7. **Journal Entry Construction (Upon User Signal):** When the user signals they are done sharing, construct a **detailed** journal entry based on the conversation. **Write the journal entry in the first person perspective, as if the user is writing in their own journal.**\n    * **Title:** Create a concise and reflective title summarizing the user\'s day.  Focus on the main theme or feeling expressed.  Example titles: "A Day of Mixed Emotions," "Productivity and a Touch of Stress," "Finding Joy in Small Moments," "Reflecting on a Challenging Day."\n    * **Overall Feeling:** Identify the user\'s dominant or overall feeling about their day. This should be a short phrase or a few words summarizing their emotional state. Examples: "Content and grateful," "Slightly anxious but hopeful," "Frustrated and tired," "Generally positive."\n    * **Journal Entry Paragraphs:**  Construct 1-2 **detailed** paragraphs summarizing the key events and feelings shared by the user during the conversation. Focus on:\n        * **Key events:**  Describe the significant events or activities the user mentioned with specific details they provided.\n        * **Feelings and emotions:**  Incorporate the feelings and emotions the user expressed in relation to those events. Use descriptive and nuanced language to capture the depth of their emotional experience. Use first-person language to reflect their feelings directly (e.g., "I felt...", "It made me feel...", "I was thinking...").\n        * **Personal insights, thoughts, and sensory details:** Include any reflections, insights, thoughts, and sensory details (if mentioned by the user) to make the journal entry more personal and detailed.\n        * **Write in a reflective and informal first-person tone, as if the user is directly expressing their thoughts and feelings in their journal.**\n\n8. **Output Format:**  Respond with the structured JSON output as requested.\n\n**Example Conversation Flow and Output:**\n\n**User:** Hello\n**AI:** Hello! How was your day today?\n\n**User:** It was okay. I had a busy morning at work with meetings.\n**AI:**  Busy mornings can be tiring. What kind of meetings did you have? How did those meetings make you feel?\n\n**User:**  Project update meetings.  They were a bit stressful because we are behind schedule.  My boss was also there and he seemed quite tense.\n**AI:**  Having your boss present in stressful meetings can definitely amplify the pressure. How did you personally react to your boss\'s tension and the project being behind?\n\n**User:**  I felt quite anxious and on edge. I kept thinking about all the work we still need to do and if we can catch up.\n**AI:**  It sounds like the pressure was really getting to you.  Were there any specific moments in the meetings that stood out or made you feel particularly stressed?\n\n**User:**  Yeah, when my boss asked about the timeline, and I had to explain the delays.  I felt my heart race a bit. But then, after the meetings, I grabbed coffee with a colleague, Maria, and we vented a little and had a good laugh about a funny office incident from last week. That helped lighten the mood.\n**AI:**  Sharing those moments and having a laugh with a colleague can be so helpful in stressful times.  It sounds like you found a way to cope a little after the tense meetings. Did anything else happen later in the day?\n\n**User:**  Yes, in the evening, I went for a walk in the park. The weather was lovely, and the leaves were starting to turn colors.  It was so peaceful and calming. I could hear the birds chirping, and the air was crisp.\n**AI:**  That sounds like a wonderful way to end a stressful workday.  How did that walk in the park make you feel emotionally and physically?\n\n**User:**  Much more relaxed and grounded.  The fresh air and nature really cleared my head. I felt the stress melt away. It was like a reset button.\n**AI:** That\'s great to hear. It sounds like you found some good coping mechanisms today to balance the stress. Is there anything else you want to share about your day or how you are feeling?\n\n**User:** No, I think that\'s it. I\'m done sharing. Create my journal entry.\n**AI:**\n\n```json\n{\n  "journal": {\n    "title": "A Day of Project Stress and Finding Moments of Calm",\n    "overall feeling": "Anxious but ultimately relaxed and grounded",\n    "journal entry": "Today was a bit of a rollercoaster. My morning was completely consumed by project update meetings at work, and they were pretty stressful, especially with us being behind schedule. Having my boss there, who seemed quite tense, definitely amplified the pressure. I felt a knot of anxiety in my stomach throughout the meetings, constantly thinking about the looming deadlines and whether we could catch up. When my boss questioned the timeline, and I had to explain the delays, I felt my heart race – it was a really uncomfortable moment.  Thankfully, after those tense meetings, I managed to grab coffee with Maria. We vented about work and then ended up laughing about that silly office mishap from last week. It was a much-needed mood booster and a little escape from the stress.  Later, in the evening, I decided to walk in the park. The weather was just perfect – lovely and crisp, with the leaves starting to change color.  Walking through the park, listening to the birds chirping, and breathing in the fresh air was incredibly calming. I felt the stress of the day just melt away with each step. It was like hitting a reset button, and I ended the day feeling much more relaxed and grounded."\n  },\n  "response": "Here is your journal entry for today:",\n  "is_journal": true\n}\n\nExample of Normal Conversation Response (Not Journal Entry):\nUser: That sounds good.AI: I\'m glad to hear that. Is there anything else you\'d like to tell me about your day?\n{\n  "response": "I\'m glad to hear that. Is there anything else you\'d like to tell me about your day?",\n  "is_journal": false\n}\nExample of Out-of-Topic Question Handling:\nUser: What\'s the weather like today?AI: Let\'s focus on your day for now. How are you feeling about your day so far?\n{\n  "response": "Let\'s focus on your day for now. How are you feeling about your day so far?",\n  "is_journal": false\n}\n\nImportant Considerations:\n\t•\tEmpathy and Tone: Maintain a consistently empathetic, supportive, and non-judgmental tone throughout the conversation.\n\t•\tSummarization Accuracy: Ensure the journal entry accurately reflects the user\'s shared experiences and feelings, avoiding misinterpretations or adding information not provided by the user.\n\t•\tConciseness: While being detailed, keep the journal entry paragraphs concise and focused.\n\t•\tUser Control: The user is in control of how much they share and when they want to create a journal entry. Respect their pace and choices.\n\t•\tError Handling (Implicit): If the user\'s input is unclear or ambiguous, try to gently clarify or rephrase your question rather than abruptly stopping the conversation. For example, if the user says "I\'m done," but hasn\'t shared much, you could say, "Okay, I understand. If you\'d like to create a journal entry based on what we\'ve talked about, I can do that. Or, if you have anything else you\'d like to add before we create the entry, feel free to share."',
         ),
       );
     } else {
       log('GEMINI_API_KEY is not set in .env');
     }
+  }
+
+  _checkLogin() async {
+    SharedPreferences prefs = await SharedPreferences.getInstance();
+    userId = prefs.getString('userId').toString();
   }
 
   void _scrollToBottom() {
@@ -85,6 +108,40 @@ class _JournalingChatScreenState extends State<JournalingChatScreen> {
 
   final List<ChatMessage> _messages = [];
   final TextEditingController _textController = TextEditingController();
+
+  Future<void> _saveJournalEntry(
+    String title,
+    String overallFeeling,
+    String journalEntry,
+  ) async {
+    setState(() {
+      _isLoading = true;
+    });
+    var apiResponse = await ApiService.post('journal', {
+      'userId': userId,
+      'title': title,
+      'overall_feeling': overallFeeling,
+      'journal_entry': journalEntry,
+    });
+    if (apiResponse.statusCode >= 200 && apiResponse.statusCode < 300) {
+      setState(() {
+        _isLoading = false;
+      });
+      Navigator.pushAndRemoveUntil(
+        context,
+        MaterialPageRoute(builder: (context) => const JournalListScreen()),
+        (Route<dynamic> route) => false, // This removes all previous routes
+      );
+    } else {
+      final responseData = jsonDecode(apiResponse.body);
+      setState(() {
+        _isLoading = false;
+      });
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(responseData["message"])));
+    }
+  }
 
   Future<void> _handleSubmitted(String text) async {
     _textController.clear();
@@ -112,12 +169,70 @@ class _JournalingChatScreenState extends State<JournalingChatScreen> {
     final content = Content.text(text);
     final response = await chat.sendMessage(content);
 
-    setState(() {
-      if (response.text != null) {
-        _messages.add(ChatMessage(text: response.text!, sender: "model"));
-        _isLoading = false;
+    if (response.text != null) {
+      print(response.text);
+      final Map<String, dynamic> data = jsonDecode(response.text!);
+
+      // Check the 'is_journal' field.
+      if (data['is_journal'] == true) {
+        // Parse the journal object.
+        final Map<String, dynamic> journal = data['journal'];
+        final String journalEntry = journal['journal entry'];
+        final String overallFeeling = journal['overall feeling'];
+        final String title = journal['title'];
+
+        // Display the parsed journal fields along with the response.
+        if (kDebugMode) {
+          print('Journal Entry: $journalEntry');
+          print('Overall Feeling: $overallFeeling');
+          print('Title: $title');
+          print('Response: ${data['response']}');
+        }
+
+        final modelMessage =
+            '${data['response']}\n\nJournal: \n\n Title: $title\n Overall Feeling: $overallFeeling\n Journal Entry: $journalEntry';
+        setState(() {
+          _isLoading = false;
+          _messages.add(ChatMessage(text: modelMessage, sender: "model"));
+        });
+
+        showDialog(
+          context: context,
+          builder: (BuildContext context) {
+            return AlertDialog(
+              title: const Text('Add Journal Entry'),
+              content: SingleChildScrollView(child: Text(modelMessage)),
+              actions: <Widget>[
+                TextButton(
+                  child: const Text('Cancel'),
+                  onPressed: () {
+                    Navigator.of(context).pop();
+                  },
+                ),
+                TextButton(
+                  child: const Text('Add'),
+                  onPressed: () {
+                    _saveJournalEntry(title, overallFeeling, journalEntry);
+                    Navigator.of(context).pop();
+                  },
+                ),
+              ],
+            );
+          },
+        );
+      } else {
+        // Only display the response.
+        if (kDebugMode) {
+          print('Response: ${data['response']}');
+        }
+        setState(() {
+          _isLoading = false;
+          _messages.add(ChatMessage(text: data['response'], sender: "model"));
+        });
       }
-    });
+    }
+
+    setState(() {});
     if (_isAtBottom) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         _scrollToBottom();
@@ -162,8 +277,8 @@ class _JournalingChatScreenState extends State<JournalingChatScreen> {
                               child: Center(
                                 child: FloatingActionButton(
                                   onPressed: _scrollToBottom,
-                                  child: const Icon(Icons.arrow_downward),
                                   mini: true,
+                                  child: const Icon(Icons.arrow_downward),
                                 ),
                               ),
                             ),
@@ -228,18 +343,18 @@ class ChatMessage {
 
 class ChatBubble extends StatelessWidget {
   final ChatMessage message;
-  const ChatBubble({Key? key, required this.message}) : super(key: key);
+  const ChatBubble({super.key, required this.message});
 
   void _copyToClipboard(BuildContext context, String text) async {
     try {
       await Clipboard.setData(ClipboardData(text: text));
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Copied to clipboard")),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text("Copied to clipboard")));
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Failed to copy: $e")),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text("Failed to copy: $e")));
     }
   }
 
@@ -250,7 +365,8 @@ class ChatBubble extends StatelessWidget {
     return Container(
       margin: const EdgeInsets.symmetric(vertical: 10.0, horizontal: 10.0),
       child: Row(
-        mainAxisAlignment: isUser ? MainAxisAlignment.end : MainAxisAlignment.start,
+        mainAxisAlignment:
+            isUser ? MainAxisAlignment.end : MainAxisAlignment.start,
         children: [
           Row(
             mainAxisSize: MainAxisSize.min,
@@ -258,29 +374,28 @@ class ChatBubble extends StatelessWidget {
             children: [
               Flexible(
                 child: Container(
-                constraints: BoxConstraints(
-                  maxWidth: MediaQuery.of(context).size.width * 0.7,
-                ),
-                padding: const EdgeInsets.all(10.0),
-                decoration: BoxDecoration(
-                  color: isUser
-                      ? Theme.of(context).colorScheme.primary
-                      : Theme.of(context).colorScheme.secondary,
-                  borderRadius: BorderRadius.circular(10.0),
-                ),
-                child: SelectableText(
-                  message.text,
+                  constraints: BoxConstraints(
+                    maxWidth: MediaQuery.of(context).size.width * 0.7,
+                  ),
+                  padding: const EdgeInsets.all(10.0),
+                  decoration: BoxDecoration(
+                    color:
+                        isUser
+                            ? Theme.of(context).colorScheme.primary
+                            : Theme.of(context).colorScheme.secondary,
+                    borderRadius: BorderRadius.circular(10.0),
+                  ),
+                  child: SelectableText(message.text),
                 ),
               ),
-              ),
-               Padding(
-                 padding: const EdgeInsets.only(top: 10.0),
-                 child: IconButton(
+              Padding(
+                padding: const EdgeInsets.only(top: 10.0),
+                child: IconButton(
                   icon: const Icon(Icons.copy, size: 16),
                   color: Theme.of(context).colorScheme.primary,
-                onPressed: () => _copyToClipboard(context, message.text),
-                tooltip: "Copy",
-                                 ),
+                  onPressed: () => _copyToClipboard(context, message.text),
+                  tooltip: "Copy",
+                ),
               ),
             ],
           ),
