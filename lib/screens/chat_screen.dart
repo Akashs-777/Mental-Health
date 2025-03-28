@@ -14,8 +14,8 @@ import '../widgets/nav_drawer.dart';
 import 'chat_history_screen.dart';
 
 class ChatScreen extends StatefulWidget {
-  String chatSessionId;
-  ChatScreen({super.key, required this.chatSessionId});
+  final String chatSessionId;
+  const ChatScreen({super.key, required this.chatSessionId});
 
   @override
   State<ChatScreen> createState() => _ChatScreenState();
@@ -30,12 +30,14 @@ class _ChatScreenState extends State<ChatScreen> {
   late final GenerativeModel model;
   late final String userId;
   late String chatName;
+  late String chatSessionId;
 
   final ScrollController _scrollController = ScrollController();
 
   @override
   void initState() {
     super.initState();
+    chatSessionId = widget.chatSessionId;
     _scrollController.addListener(() {
       if (_scrollDebounceTimer?.isActive ?? false)
         _scrollDebounceTimer!.cancel();
@@ -85,8 +87,10 @@ class _ChatScreenState extends State<ChatScreen> {
     final now = DateTime.now().millisecondsSinceEpoch.toString();
     print('Chat Session Id: ${widget.chatSessionId}');
     if (widget.chatSessionId == '') {
-      widget.chatSessionId =
+      setState(() {
+        chatSessionId =
           sha256.convert(utf8.encode(userId + now)).toString();
+      });
       chatName = 'Chat on ${now.toString()}';
     } else {
       await _loadChatHistory();
@@ -250,7 +254,6 @@ class _ChatScreenState extends State<ChatScreen> {
         setState(() {
           _isLoading = false;
         });
-        
       } else {
         setState(() {
           _isLoading = false;
@@ -385,13 +388,13 @@ class ChatBubble extends StatelessWidget {
   void _copyToClipboard(BuildContext context, String text) async {
     try {
       await Clipboard.setData(ClipboardData(text: text));
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Copied to clipboard")),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text("Copied to clipboard")));
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Failed to copy: $e")),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text("Failed to copy: $e")));
     }
   }
 
@@ -402,7 +405,8 @@ class ChatBubble extends StatelessWidget {
     return Container(
       margin: const EdgeInsets.symmetric(vertical: 10.0, horizontal: 10.0),
       child: Row(
-        mainAxisAlignment: isUser ? MainAxisAlignment.end : MainAxisAlignment.start,
+        mainAxisAlignment:
+            isUser ? MainAxisAlignment.end : MainAxisAlignment.start,
         children: [
           Row(
             mainAxisSize: MainAxisSize.min,
@@ -410,29 +414,28 @@ class ChatBubble extends StatelessWidget {
             children: [
               Flexible(
                 child: Container(
-                constraints: BoxConstraints(
-                  maxWidth: MediaQuery.of(context).size.width * 0.7,
-                ),
-                padding: const EdgeInsets.all(10.0),
-                decoration: BoxDecoration(
-                  color: isUser
-                      ? Theme.of(context).colorScheme.primary
-                      : Theme.of(context).colorScheme.secondary,
-                  borderRadius: BorderRadius.circular(10.0),
-                ),
-                child: SelectableText(
-                  message.text,
+                  constraints: BoxConstraints(
+                    maxWidth: MediaQuery.of(context).size.width * 0.7,
+                  ),
+                  padding: const EdgeInsets.all(10.0),
+                  decoration: BoxDecoration(
+                    color:
+                        isUser
+                            ? Theme.of(context).colorScheme.primary
+                            : Theme.of(context).colorScheme.secondary,
+                    borderRadius: BorderRadius.circular(10.0),
+                  ),
+                  child: SelectableText(message.text),
                 ),
               ),
-              ),
-               Padding(
-                 padding: const EdgeInsets.only(top: 10.0),
-                 child: IconButton(
+              Padding(
+                padding: const EdgeInsets.only(top: 10.0),
+                child: IconButton(
                   icon: const Icon(Icons.copy, size: 16),
                   color: Theme.of(context).colorScheme.primary,
-                onPressed: () => _copyToClipboard(context, message.text),
-                tooltip: "Copy",
-                                 ),
+                  onPressed: () => _copyToClipboard(context, message.text),
+                  tooltip: "Copy",
+                ),
               ),
             ],
           ),
