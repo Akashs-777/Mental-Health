@@ -1,9 +1,9 @@
-// Suggested code may be subject to a license. Learn more: ~LicenseLog:1487831153.
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 import 'package:intl/intl.dart';
 import 'package:flutter/material.dart';
+import 'package:myapp/screens/journal_edit_screen.dart';
 import 'package:myapp/screens/view_journal_screen.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -145,6 +145,15 @@ class _JournalListScreenState extends State<JournalListScreen> {
                           icon: const Icon(Icons.edit),
                           onPressed: () {
                             // Handle edit action
+                            Navigator.of(context).push(
+                              MaterialPageRoute(
+                                  builder: (context) => JournalEditScreen(
+                                        journalId: journal.journalId,
+                                        title: journal.title,
+                                        overallFeeling: journal.overallFeeling,
+                                        journalEntry: journal.journalEntry,
+                                      )));
+
                           },
                         ),
                         IconButton(

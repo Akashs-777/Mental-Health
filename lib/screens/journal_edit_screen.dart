@@ -6,17 +6,31 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../services/api_service.dart';
 
-class JournalEntryScreen extends StatefulWidget {
+class JournalEditScreen extends StatefulWidget {
 
-  const JournalEntryScreen({
+  final String journalId;
+  final String title;
+  final String overallFeeling;
+  final String journalEntry;
+
+  const JournalEditScreen({
     super.key,
+    required this.journalId,
+    required this.title,
+    required this.overallFeeling,
+    required this.journalEntry,
   });
 
   @override
-  State<JournalEntryScreen> createState() => _JournalEntryScreenState();
+  State<JournalEditScreen> createState() => _JournalEditScreenState();
 }
 
-class _JournalEntryScreenState extends State<JournalEntryScreen> {
+class _JournalEditScreenState extends State<JournalEditScreen> {
+
+  late String title;
+  late String overallFeeling;
+  late String journalEntry;
+  late String date;
 
   final TextEditingController _bodyTextEditingController =
       TextEditingController();
@@ -30,6 +44,15 @@ class _JournalEntryScreenState extends State<JournalEntryScreen> {
   @override
   void initState() {
     super.initState();
+
+    title = widget.title;
+    overallFeeling = widget.overallFeeling;
+    journalEntry = widget.journalEntry;
+
+    _bodyTextEditingController.text = journalEntry;
+    _titleTextEditingController.text = title;
+    _feelingTextEditingController.text = overallFeeling;
+
     _checkLogin();
   }
 
@@ -58,7 +81,7 @@ class _JournalEntryScreenState extends State<JournalEntryScreen> {
     setState(() {
       _isLoading = true;
     });
-    var apiResponse = await ApiService.post('journal', {
+    var apiResponse = await ApiService.put('journal/${widget.journalId}', {
       'userId': userId,
       'title': title,
       'overall_feeling': feeling,
